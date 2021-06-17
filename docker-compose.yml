@@ -1,0 +1,67 @@
+# For more information: https://laravel.com/docs/sail
+version: '3'
+services:
+    laravel.test:
+        image: hkuit155/laravel_sport_web:sport_web
+        ports:
+            - '${APP_PORT:-8000}:8000'
+        environment:
+            WWWUSER: '${WWWUSER}'
+            LARAVEL_SAIL: 1
+        networks:
+            - sail
+        depends_on:
+            - pgsql
+            - redis
+    pgsql:
+        image: hkuit155/laravel_sport_web:postgres
+        ports:
+            - '${FORWARD_DB_PORT:-5432}:5432'
+        environment:
+            PGPASSWORD: '${DB_PASSWORD:-secret}'
+            POSTGRES_DB: '${DB_DATABASE}'
+            POSTGRES_USER: '${DB_USERNAME}'
+            POSTGRES_PASSWORD: '${DB_PASSWORD:-secret}'
+        networks:
+            - sail
+        healthcheck:
+          test: ["CMD", "pg_isready", "-q", "-d", "${DB_DATABASE}", "-U", "${DB_USERNAME}"]
+          retries: 3
+          timeout: 5s
+    redis:
+        image: hkuit155/laravel_sport_web:redis
+        ports:
+            - '${FORWARD_REDIS_PORT:-6379}:6379'
+        networks:
+            - sail
+        healthcheck:
+          test: ["CMD", "redis-cli", "ping"]
+          retries: 3
+          timeout: 5s
+    pgbackups:
+        container_name: Backup
+        image: prodrigestivill/postgres-backup-local
+        restart: always
+        volumes:
+            - ./backups:/backups
+        networks:
+            - sail
+        links:
+            - pgsql
+        depends_on:
+            - pgsql
+        environment:
+            - POSTGRES_HOST=pgsql
+            - POSTGRES_DB=${DB_DATABASE}
+            - POSTGRES_USER=${DB_USERNAME}
+            - POSTGRES_PASSWORD=${DB_PASSWORD:-secret}
+            - POSTGRES_EXTRA_OPTS=-Z9 --schema=public --blobs
+            - SCHEDULE=@every 0h30m00s
+            - BACKUP_KEEP_DAYS=7
+            - BACKUP_KEEP_WEEKS=4
+            - BACKUP_KEEP_MONTHS=6
+            - HEALTHCHECK_PORT=8080
+networks:
+    sail:
+        driver: bridge
+
